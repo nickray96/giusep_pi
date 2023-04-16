@@ -11,7 +11,7 @@
 
 static const uint8_t REG_DEVID = 0x00;
 
-void reg_read(spi_inst_t *spi, const uint8_t reg, const int16_t *dest){
+void reg_read(spi_inst_t *spi, const uint8_t reg, uint16_t *dest){
 
     uint8_t mb = 0;
 
@@ -20,8 +20,11 @@ void reg_read(spi_inst_t *spi, const uint8_t reg, const int16_t *dest){
 
     // Read from register
     gpio_put(SPI_CS, 0);
-    spi_write_blocking(spi, &msg, 1);
+    gpio_put(SPI_SCK, 0);
+    sleep_ms(10);
+//    spi_write_blocking(spi, &msg, 1);
     spi_read16_blocking(spi, 0, dest, 1);
+    gpio_put(SPI_SCK, 1);
     gpio_put(SPI_CS, 1);
 
 }
@@ -53,31 +56,33 @@ void init_therm(){
     gpio_set_dir(SPI_CS, GPIO_OUT);
     gpio_put(SPI_CS, 1);
 
-    spi_set_format( spi0,   // SPI instance
-                    8,      // Number of bits per transfer
-                    1,      // Polarity (CPOL)
+    spi_set_format( spi0,      // SPI instance
+                    12,   // Number of bits per transfer
+                    1,       // Polarity (CPOL)
                     1,      // Phase (CPHA)
                     SPI_MSB_FIRST);
 
     gpio_set_function(SPI_SCK, GPIO_FUNC_SPI);
     gpio_set_function(SPI_SO, GPIO_FUNC_SPI);
-
-
 }
 
 int main(){
 
-    // Start the CLI
-    // multicore_launch_core1(cli_main);
     spi_inst_t *spi = spi0;
-    uint16_t *data;
-    reg_read(spi, REG_DEVID, data);
+    uint16_t data = 0x00;
+    uint16_t *pData = &data;
+
+    reg_read(spi, REG_DEVID, pData);
     init_therm();
     spi_init(spi, 1000 * 1000);
 
-    float temp = get_celsius(data);
-    printf("Celsius: %.4f\n", temp);
-    sleep_ms(1000);
+    multicore_launch_core1(cli_main);
 
+    while(true) {
+        reg_read(spi, REG_DEVID, pData);
+        float temp = get_celsius(pData);
+        printf("Celsius: %.4f\n", temp);
+        sleep_ms(1000);
+    }
     return 0;
 };
