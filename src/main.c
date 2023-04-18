@@ -9,79 +9,63 @@
 #include "hardware/spi.h"
 #include <stdio.h>
 
-static const uint8_t REG_DEVID = 0x00;
 
-void reg_read(spi_inst_t *spi, const uint8_t reg, uint16_t *dest){
-
-    uint8_t mb = 0;
-
-    // Construct message (set ~W bit high)
-    uint8_t msg = 0x80 | (mb << 6) | reg;
-
-    // Read from register
-    gpio_put(SPI_CS, 0);
-    gpio_put(SPI_SCK, 0);
-    sleep_ms(10);
-//    spi_write_blocking(spi, &msg, 1);
-    spi_read16_blocking(spi, 0, dest, 1);
-    gpio_put(SPI_SCK, 1);
-    gpio_put(SPI_CS, 1);
-
-}
-
-
-float get_celsius(const uint16_t *input_data) {
+short get_celsius(spi_inst_t *spi, uint16_t *input_data) {
 
     gpio_put(SPI_CS, 0);
-    sleep_ms(10);
+
+    spi_read16_blocking(spi, 0, input_data, 1);
 
     gpio_put(SPI_CS, 1);
 
-    if (*input_data & 0x4) {
-        // uh oh, no thermocouple attached!
-        return -100;
-        // return -100;
-    }
+    short celcius = (*input_data >> 3) * 0.25;  // First 3 are control bits
 
-    uint16_t temp = *input_data >> 3;
-
-    return temp * 0.25;
+    return celcius;
 }
 
 
-void init_therm(){
+void init_therm(spi_inst_t *spi){
     stdio_init_all();
 
     gpio_init(SPI_CS);
     gpio_set_dir(SPI_CS, GPIO_OUT);
     gpio_put(SPI_CS, 1);
 
+    spi_init(spi, 1000000);
+
+    gpio_set_function(SPI_SCK, GPIO_FUNC_SPI);
+    gpio_set_function(SPI_SO, GPIO_FUNC_SPI);
+
     spi_set_format( spi0,      // SPI instance
-                    12,   // Number of bits per transfer
+                    16,   // Number of bits per transfer
                     1,       // Polarity (CPOL)
                     1,      // Phase (CPHA)
                     SPI_MSB_FIRST);
 
-    gpio_set_function(SPI_SCK, GPIO_FUNC_SPI);
-    gpio_set_function(SPI_SO, GPIO_FUNC_SPI);
 }
 
 int main(){
 
     spi_inst_t *spi = spi0;
-    uint16_t data = 0x00;
+    uint16_t data = 0x0;
     uint16_t *pData = &data;
 
-    reg_read(spi, REG_DEVID, pData);
-    init_therm();
-    spi_init(spi, 1000 * 1000);
+    init_therm(spi);
 
-    multicore_launch_core1(cli_main);
+
+    // This launches stdio_init_all, don't do it again
+//    multicore_launch_core1(cli_main);  Prob going to gid rid of this and do something more simple
+    gpio_init(HEALTH_LED);
+    gpio_set_dir(HEALTH_LED, GPIO_OUT);
 
     while(true) {
-        reg_read(spi, REG_DEVID, pData);
-        float temp = get_celsius(pData);
+
+        float temp = get_celsius(spi, pData);
         printf("Celsius: %.4f\n", temp);
+
+        gpio_put(HEALTH_LED, 1);
+        sleep_ms(1000);
+        gpio_put(HEALTH_LED, 0);
         sleep_ms(1000);
     }
     return 0;

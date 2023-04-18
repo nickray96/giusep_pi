@@ -8,6 +8,6 @@
 #define SPI_SCK 2
 #define SPI_CS  1
 #define SPI_SO  0
-
+#define HEALTH_LED 28
 
 #endif //GIUSEP_PI_DEFINITIONS_H
