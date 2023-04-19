@@ -12,3 +12,5 @@
 * WS2812 indication of state/temp/errors
 * Machine auto-shutdown
 * Pressure sensor input/UX
+* GitHub Actions build pipeline upon commit
+* Instructions
