@@ -30,12 +30,11 @@ void blink() {
 
 }
 
-void set_boiler_relay(bool enable){
+void set_boiler_relay(bool enable) {
 
-    if(!enable){
+    if (!enable) {
         gpio_put(BOILER_RELAY_OUTPUT, 0);
-    }
-    else{
+    } else {
         gpio_put(BOILER_RELAY_OUTPUT, 1);
     }
 }
@@ -82,44 +81,42 @@ void init_peripherals(spi_inst_t *spi) {
 
 }
 
-void calculate_temperature_error(boiler_control_t boiler_information){
+void calculate_temperature_error(boiler_control_t boiler_information) {
 
-    uint64_t time_delta = (boiler_information.ms_time_now - boiler_information.ms_time_last)/1000;
+    uint64_t time_delta = (boiler_information.ms_time_now - boiler_information.ms_time_last) / 1000;
+    printf("Time Delta: %llu\n", time_delta);
 
     float error = TARGET_BOILER_TEMPERATURE - boiler_information.current_boiler_temperature;
-    boiler_information.current_error = error;
     float proportional_gain = error * Kp;
     float integral_gain = error * time_delta * Ki;
-
     float output = proportional_gain + integral_gain;
 
     // Clamp the output because we cannot drive higher than MAX_DUTY_CYCLE, or lower than 0
-    if (output > MAX_DUTY_CYCLE){
+    if (output > MAX_DUTY_CYCLE) {
         output = MAX_DUTY_CYCLE;
     }
     if (output < 0) {
         output = 0;
     }
 
-    boiler_information.duty_cycle = (int)output;  // this is lazy
+    boiler_information.current_error = error;
+    boiler_information.duty_cycle = (int) output;  // this is lazy
 
 }
 
-void boiler_set_duty_cycle(boiler_control_t boiler_information){
+void boiler_set_duty_cycle(boiler_control_t boiler_information) {
     // Set the boiler on for (duty_cycle/MAX_DUTY_CYCLE)*1000 milliseconds
     // Does not PWM the boiler because SSR relay will pulse electrical system in house
 
-    if(boiler_information.duty_cycle <= 0){
+    if (boiler_information.duty_cycle <= 0) {
         set_boiler_relay(false);
         sleep_ms(1000);
-    }
-    else if(boiler_information.duty_cycle >= MAX_DUTY_CYCLE){
+    } else if (boiler_information.duty_cycle >= MAX_DUTY_CYCLE) {
         set_boiler_relay(true);
         sleep_ms(1000);
-    }
-    else{
-        uint16_t ms_to_idle = (boiler_information.duty_cycle/MAX_DUTY_CYCLE)*1000;
-        uint16_t ms_to_boil = 1000 - ms_to_idle;
+    } else {
+        uint16_t ms_to_boil = (boiler_information.duty_cycle / MAX_DUTY_CYCLE) * 1000;
+        uint16_t ms_to_idle = 1000 - ms_to_boil;
         set_boiler_relay(true);
         sleep_ms(ms_to_boil);
         set_boiler_relay(false);
