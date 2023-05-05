@@ -9,7 +9,7 @@
 #include <stdio.h>
 
 
-short get_celsius(spi_inst_t *spi, uint16_t *input_data) {
+float get_celsius(spi_inst_t *spi, uint16_t *input_data) {
 
     gpio_put(SPI_CS, 0);
 
@@ -17,7 +17,7 @@ short get_celsius(spi_inst_t *spi, uint16_t *input_data) {
 
     gpio_put(SPI_CS, 1);
 
-    short celcius = (*input_data >> 3) * 0.25;  // First 3 are control bits
+    float celcius = (*input_data >> 3) * 0.25;  // First 3 are control bits
 
     return celcius;
 }
@@ -30,11 +30,9 @@ void blink() {
 
 }
 
-void set_boiler_relay(){
-    int boiler_switch_state = gpio_get(BOILER_SWITCH_INPUT);
+void set_boiler_relay(bool enable){
 
-    // Boiler relay is active low
-    if(boiler_switch_state != 0){
+    if(!enable){
         gpio_put(BOILER_RELAY_OUTPUT, 0);
     }
     else{
@@ -80,7 +78,55 @@ void init_peripherals(spi_inst_t *spi) {
     gpio_put(BOILER_RELAY_OUTPUT, 1);
     gpio_put(BOILER_SECONDARY_RELAY_OUTPUT, 1);
 
+    set_boiler_relay(false);
+
 }
+
+void calculate_temperature_error(boiler_control_t boiler_information){
+
+    uint64_t time_delta = (boiler_information.ms_time_now - boiler_information.ms_time_last)/1000;
+
+    float error = TARGET_BOILER_TEMPERATURE - boiler_information.current_boiler_temperature;
+    boiler_information.current_error = error;
+    float proportional_gain = error * Kp;
+    float integral_gain = error * time_delta * Ki;
+
+    float output = proportional_gain + integral_gain;
+
+    // Clamp the output because we cannot drive higher than MAX_DUTY_CYCLE, or lower than 0
+    if (output > MAX_DUTY_CYCLE){
+        output = MAX_DUTY_CYCLE;
+    }
+    if (output < 0) {
+        output = 0;
+    }
+
+    boiler_information.duty_cycle = (int)output;  // this is lazy
+
+}
+
+void boiler_set_duty_cycle(boiler_control_t boiler_information){
+    // Set the boiler on for (duty_cycle/MAX_DUTY_CYCLE)*1000 milliseconds
+    // Does not PWM the boiler because SSR relay will pulse electrical system in house
+
+    if(boiler_information.duty_cycle <= 0){
+        set_boiler_relay(false);
+        sleep_ms(1000);
+    }
+    else if(boiler_information.duty_cycle >= MAX_DUTY_CYCLE){
+        set_boiler_relay(true);
+        sleep_ms(1000);
+    }
+    else{
+        uint16_t ms_to_idle = (boiler_information.duty_cycle/MAX_DUTY_CYCLE)*1000;
+        uint16_t ms_to_boil = 1000 - ms_to_idle;
+        set_boiler_relay(true);
+        sleep_ms(ms_to_boil);
+        set_boiler_relay(false);
+        sleep_ms(ms_to_idle);
+    }
+}
+
 
 int main() {
 
@@ -88,16 +134,29 @@ int main() {
     uint16_t thermocouple_data = 0x0;
     uint16_t *pTCData = &thermocouple_data;
 
+    boiler_control_t boiler_information;
+    boiler_information.duty_cycle = 0;
+    boiler_information.ms_time_last = 0;
+
     init_peripherals(spi);
 
     // TODO: needs to do things from an ISR or something better than sleep_ms
     while (true) {
 
-        float temp = get_celsius(spi, pTCData);
-        printf("Celsius: %.4f\n", temp);
+        absolute_time_t absolute_time = get_absolute_time();
+        boiler_information.ms_time_last = to_ms_since_boot(absolute_time);
+        boiler_information.current_boiler_temperature = get_celsius(spi, pTCData);
+
+        printf("Celsius: %.4f\n", boiler_information.current_boiler_temperature);
+        calculate_temperature_error(boiler_information);
+
+        boiler_set_duty_cycle(boiler_information);
+        printf("Current Duty Cycle: %d\n", boiler_information.duty_cycle);
+        printf("Current Error: %.4f\n", boiler_information.current_error);
+        boiler_information.ms_time_now = to_ms_since_boot(absolute_time);
+
         blink();
-        set_boiler_relay();
-        sleep_ms(1000);
+
     }
     return 0;
 };
