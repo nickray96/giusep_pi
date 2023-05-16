@@ -19,8 +19,8 @@
 #define MAX_DUTY_CYCLE 30
 #define TARGET_BOILER_TEMPERATURE 90.0
 #define Kp 1.0
-#define Ki 0.05
-#define Kd 0.0
+#define Ki 0.01
+#define Kd 0.001
 
 typedef struct {
     float current_boiler_temperature;
