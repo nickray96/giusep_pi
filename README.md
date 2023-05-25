@@ -6,9 +6,9 @@
 * PID control of boiler based on temperature
 
 ### WIP:
+* WS2812 indication of state/temp/errors
 
 ### Not Started:
-* WS2812 indication of state/temp/errors
 * Machine auto-shutdown
 * Pressure sensor input/UX
 * GitHub Actions build pipeline upon commit
