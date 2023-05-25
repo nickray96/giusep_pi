@@ -6,7 +6,7 @@ set(BOARD pico_sdk)
 add_executable(build_output
         src/main.c
         src/include/definitions.h
-        )
+        src/ws2812.c)
 
 set_target_properties(build_output PROPERTIES
         CMAKE_C_STANDARD 11

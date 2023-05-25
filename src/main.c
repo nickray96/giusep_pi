@@ -56,15 +56,10 @@ void init_peripherals(spi_inst_t *spi) {
                    1,      // Phase (CPHA)
                    SPI_MSB_FIRST);
 
-    //Init blinky LED
+    // Init blinky LED
     gpio_init(HEALTH_LED);
     gpio_set_dir(HEALTH_LED, GPIO_OUT);
     gpio_put(HEALTH_LED, 0);
-
-    // Init boiler switch input
-    gpio_init(BOILER_SWITCH_INPUT);
-    gpio_set_dir(BOILER_SWITCH_INPUT, GPIO_IN);
-    gpio_pull_down(BOILER_SWITCH_INPUT);
 
     // Init boiler relay output, secondary not used yet but driving low to keep from floating
     gpio_init(BOILER_RELAY_OUTPUT);
@@ -158,6 +153,7 @@ int main() {
     double duty_cycle;
     float current_boiler_temperature;
     init_peripherals(spi);
+    init_leds();
 
     while (true) {
 
