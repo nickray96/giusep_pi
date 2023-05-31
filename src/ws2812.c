@@ -36,30 +36,25 @@
 
 
 critical_section_t crit_sec;
-ws2812_array_t pixel_array = {0};
 
-void init_leds() {
+
+void init_leds(p_ws2812_array_t ptr_pixel_array) {
     critical_section_init(&crit_sec);
+    ws2812_array_t pixel_array = *ptr_pixel_array;
     gpio_init(WS2818_OUTPUT);
     gpio_set_dir(WS2818_OUTPUT, true);
     for (int led = 0; led < WS2812_PIXEL_COUNT; led++) {
-        pixel_array.pixels[led].blue = 0xFF;
+        pixel_array.pixels[led].blue = 0x00;
         pixel_array.pixels[led].red = 0x00;
         pixel_array.pixels[led].green = 0x00;
     }
-    refresh_leds();
-    sleep_ms(200);
-    for (int led = 0; led < WS2812_PIXEL_COUNT; led++) {
-        pixel_array.pixels[led].blue = 0x00;
-        pixel_array.pixels[led].red = 0xFF;
-        pixel_array.pixels[led].green = 0x00;
-    }
-    refresh_leds();
+    refresh_leds(ptr_pixel_array);
 
 }
 
-void refresh_leds() {
+void refresh_leds(p_ws2812_array_t ptr_pixel_array) {
     uint32_t * input_buffer;
+    ws2812_array_t pixel_array = *ptr_pixel_array;
     uint32_t * input_buffer_temp = (uint32_t *) &pixel_array;
     input_buffer = (uint32_t *) malloc(sizeof(pixel_array) + sizeof(ws2812_pixel_t));
     // This adds 1 extra "pixel" to the array, using the first WS2812 as a level shifter

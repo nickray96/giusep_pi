@@ -8,6 +8,8 @@
 #include "hardware/spi.h"
 #include <stdio.h>
 
+boiler_control_t boiler_information = {0};
+ws2812_array_t pixel_array = {0};
 
 float get_celsius(spi_inst_t *spi, uint16_t *input_data) {
 
@@ -73,7 +75,7 @@ void init_peripherals(spi_inst_t *spi) {
 
 }
 
-double calculate_temperature_error(float current_boiler_temperature) {
+double calculate_temperature_error() {
 
     static float error = 0;
     static float previous_error = 0;
@@ -82,10 +84,10 @@ double calculate_temperature_error(float current_boiler_temperature) {
     static double derivative_gain = 0.0;
 
     previous_error = error;
-    error = TARGET_BOILER_TEMPERATURE - current_boiler_temperature;
+    error = TARGET_BOILER_TEMPERATURE - boiler_information.current_boiler_temperature;
 
     printf("Current Error: %.4f\n", error);
-    printf("Current Boiler: %.4f\n", current_boiler_temperature);
+    printf("Current Boiler: %.4f\n", boiler_information.current_boiler_temperature);
 
     // Time delta is assumed to be 1 second due to boiler_set_duty_cycle
     // only returning after 1 second has elapsed
@@ -113,21 +115,21 @@ double calculate_temperature_error(float current_boiler_temperature) {
 
 }
 
-void boiler_set_duty_cycle(double duty_cycle) {
+void boiler_set_duty_cycle() {
     // Set the boiler on for (duty_cycle/MAX_DUTY_CYCLE)*1000 milliseconds
     // Does not PWM the boiler because SSR relay will pulse electrical system in house
-    uint16_t ms_to_boil = (uint16_t) ((duty_cycle / MAX_DUTY_CYCLE) * 1000);
+    uint16_t ms_to_boil = (uint16_t) ((boiler_information.duty_cycle / MAX_DUTY_CYCLE) * 1000);
     uint16_t ms_to_idle = 1000 - ms_to_boil;
     printf("Enabling boiler for %d ms\n", ms_to_boil);
     printf("Disabling boiler for %d ms\n", ms_to_idle);
-    printf("Duty Cycle: %.4f\n", duty_cycle);
+    printf("Duty Cycle: %.4f\n", boiler_information.duty_cycle);
 
-    if (duty_cycle <= 0) {
+    if (boiler_information.duty_cycle <= 0) {
         set_boiler_relay(false);
         sleep_ms(1000);
         return;
     }
-    if (duty_cycle >= MAX_DUTY_CYCLE) {
+    if (boiler_information.duty_cycle >= MAX_DUTY_CYCLE) {
         set_boiler_relay(true);
         sleep_ms(1000);
         return;
@@ -140,6 +142,34 @@ void boiler_set_duty_cycle(double duty_cycle) {
 
 }
 
+void update_led_temperature_display() {
+    uint8_t blue_tint;
+    uint8_t red_tint;
+
+    while (true) {
+        // prevent rollover, should be no need to check negative numbers
+        if (boiler_information.current_boiler_temperature >= TARGET_BOILER_TEMPERATURE) {
+            red_tint = 0xFF;
+            blue_tint = 0x00;
+        } else {
+            // assume room temp is about 25C, offset 25C from TARGET_BOILER_TEMPERATURE
+            blue_tint = (uint8_t) (0xFF *
+                                   (65 - boiler_information.current_boiler_temperature / TARGET_BOILER_TEMPERATURE));
+            red_tint = (uint8_t) (0xFF * (boiler_information.current_boiler_temperature / TARGET_BOILER_TEMPERATURE));
+        }
+
+        for (int led = 0; led < WS2812_PIXEL_COUNT; led++) {
+            pixel_array.pixels[led].blue = blue_tint;
+            pixel_array.pixels[led].red = red_tint;
+            pixel_array.pixels[led].green = 0x00;
+        }
+
+        refresh_leds(&pixel_array);
+        sleep_ms(200);
+    }
+
+}
+
 
 int main() {
 
@@ -147,21 +177,19 @@ int main() {
     uint16_t thermocouple_data = 0x0;
     uint16_t *pThermocoupleData = &thermocouple_data;
 
-    boiler_control_t *boiler_information = NULL;
-    boiler_information->duty_cycle = 0;
+    boiler_information.duty_cycle = 0;
+    boiler_information.current_boiler_temperature = 0;
 
-    double duty_cycle;
-    float current_boiler_temperature;
+    multicore_reset_core1();
     init_peripherals(spi);
-    init_leds();
+    init_leds(&pixel_array);
+    multicore_launch_core1(update_led_temperature_display);
 
     while (true) {
 
-        current_boiler_temperature = get_celsius(spi, pThermocoupleData);
-        boiler_information->current_boiler_temperature = current_boiler_temperature;
-        duty_cycle = calculate_temperature_error(current_boiler_temperature);
-        boiler_information->duty_cycle = duty_cycle;
-        boiler_set_duty_cycle(duty_cycle);
+        boiler_information.current_boiler_temperature = get_celsius(spi, pThermocoupleData);
+        boiler_information.duty_cycle = calculate_temperature_error();
+        boiler_set_duty_cycle();
         blink();
 
     }

@@ -4,6 +4,7 @@
 
 #ifndef GIUSEP_PI_DEFINITIONS_H
 #define GIUSEP_PI_DEFINITIONS_H
+
 #include <stdint.h>
 
 // MakerPi pin definitions
@@ -41,14 +42,14 @@ typedef struct ws2812_array_t {
     ws2812_pixel_t pixels[WS2812_PIXEL_COUNT];
 } ws2812_array_t, *p_ws2812_array_t;
 
-typedef struct {
+typedef struct boiler_control_t {
     float current_boiler_temperature;
     double duty_cycle;
 } boiler_control_t, *p_boiler_control_t;
 
 // Prototypes
-void refresh_leds();
+void refresh_leds(p_ws2812_array_t ptr_pixel_array);
 
-void init_leds();
+void init_leds(p_ws2812_array_t ptr_pixel_array);
 
 #endif //GIUSEP_PI_DEFINITIONS_H
