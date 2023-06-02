@@ -40,16 +40,25 @@ critical_section_t crit_sec;
 
 void init_leds(p_ws2812_array_t ptr_pixel_array) {
     critical_section_init(&crit_sec);
-    ws2812_array_t pixel_array = *ptr_pixel_array;
     gpio_init(WS2818_OUTPUT);
     gpio_set_dir(WS2818_OUTPUT, true);
-    for (int led = 0; led < WS2812_PIXEL_COUNT; led++) {
-        pixel_array.pixels[led].blue = 0x00;
-        pixel_array.pixels[led].red = 0x00;
-        pixel_array.pixels[led].green = 0x00;
-    }
+    update_all_pixels(ptr_pixel_array, 0xFF, 0x00, 0x00);
     refresh_leds(ptr_pixel_array);
+    sleep_ms(500);
+    update_all_pixels(ptr_pixel_array, 0x00, 0xFF, 0x00);
+    refresh_leds(ptr_pixel_array);
+    sleep_ms(500);
+    update_all_pixels(ptr_pixel_array, 0x00, 0x00, 0xFF);
+    refresh_leds(ptr_pixel_array);
+    sleep_ms(500);
+}
 
+void update_all_pixels(p_ws2812_array_t ptr_pixel_array, uint8_t red, uint8_t green, uint8_t blue){
+    for (int led = 0; led < WS2812_PIXEL_COUNT; led++) {
+        ptr_pixel_array->pixels[led].red = red;
+        ptr_pixel_array->pixels[led].green = green;
+        ptr_pixel_array->pixels[led].blue = blue;
+    }
 }
 
 void refresh_leds(p_ws2812_array_t ptr_pixel_array) {
@@ -88,7 +97,7 @@ void refresh_leds(p_ws2812_array_t ptr_pixel_array) {
             pixel_buffer <<= 1;
         }
     }
-
+    free(input_buffer);
     critical_section_exit(&crit_sec);
 
 }

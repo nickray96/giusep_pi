@@ -50,6 +50,8 @@ typedef struct boiler_control_t {
 // Prototypes
 void refresh_leds(p_ws2812_array_t ptr_pixel_array);
 
+void update_all_pixels(p_ws2812_array_t ptr_pixel_array, uint8_t red, uint8_t green, uint8_t blue);
+
 void init_leds(p_ws2812_array_t ptr_pixel_array);
 
 #endif //GIUSEP_PI_DEFINITIONS_H

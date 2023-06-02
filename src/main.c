@@ -143,31 +143,32 @@ void boiler_set_duty_cycle() {
 }
 
 void update_led_temperature_display() {
-    uint8_t blue_tint;
     uint8_t red_tint;
+    uint8_t green_tint = 0x00;
+    uint8_t blue_tint;
 
     while (true) {
         // prevent rollover, should be no need to check negative numbers
-        if (boiler_information.current_boiler_temperature >= TARGET_BOILER_TEMPERATURE) {
-            red_tint = 0xFF;
+        if (boiler_information.current_boiler_temperature > TARGET_BOILER_TEMPERATURE) {
+            red_tint = 0xA0;
             blue_tint = 0x00;
         } else {
-            // assume room temp is about 25C, offset 25C from TARGET_BOILER_TEMPERATURE
-            blue_tint = (uint8_t) (0xFF *
-                                   (65 - boiler_information.current_boiler_temperature / TARGET_BOILER_TEMPERATURE));
-            red_tint = (uint8_t) (0xFF * (boiler_information.current_boiler_temperature / TARGET_BOILER_TEMPERATURE));
+            // The red LED is a lot stronger than blue, so scale it down some
+            red_tint = (uint8_t) (0xA0 * (boiler_information.current_boiler_temperature / TARGET_BOILER_TEMPERATURE));
+            if (boiler_information.current_boiler_temperature < 25) {
+                blue_tint = 0xFF;
+            } else {
+                blue_tint = (uint8_t) (0xFF *
+                                       ((TARGET_BOILER_TEMPERATURE - boiler_information.current_boiler_temperature +
+                                         25) / TARGET_BOILER_TEMPERATURE));
+            }
         }
 
-        for (int led = 0; led < WS2812_PIXEL_COUNT; led++) {
-            pixel_array.pixels[led].blue = blue_tint;
-            pixel_array.pixels[led].red = red_tint;
-            pixel_array.pixels[led].green = 0x00;
-        }
+        update_all_pixels(&pixel_array, red_tint, green_tint, blue_tint);
 
         refresh_leds(&pixel_array);
         sleep_ms(200);
     }
-
 }
 
 
