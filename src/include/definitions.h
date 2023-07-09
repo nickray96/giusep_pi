@@ -44,8 +44,25 @@ typedef struct ws2812_array_t {
 
 typedef struct boiler_control_t {
     float current_boiler_temperature;
+    float pid_error;
+    float pid_previous_error;
+    float proportional_gain;
+    float integral_gain;
+    float derivative_gain;
     double duty_cycle;
+    uint8_t overheat_count;
+
 } boiler_control_t, *p_boiler_control_t;
+
+// Enums
+
+enum LED_MODE {
+    NORMAL,
+    SPI_READ_ERROR,
+    OVERHEAT_ERROR,
+
+};
+
 
 // Prototypes
 void refresh_leds(p_ws2812_array_t ptr_pixel_array);
@@ -53,5 +70,7 @@ void refresh_leds(p_ws2812_array_t ptr_pixel_array);
 void update_all_pixels(p_ws2812_array_t ptr_pixel_array, uint8_t red, uint8_t green, uint8_t blue);
 
 void init_leds(p_ws2812_array_t ptr_pixel_array);
+
+enum LED_MODE ledMode;
 
 #endif //GIUSEP_PI_DEFINITIONS_H

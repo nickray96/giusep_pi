@@ -14,6 +14,12 @@ ws2812_array_t pixel_array = {0};
 float get_celsius(spi_inst_t *spi, uint16_t *input_data) {
 
     gpio_put(SPI_CS, 0);
+
+    while(!spi_is_readable(spi)){
+        // This will never exit until SPI comes back alive
+        ledMode = SPI_READ_ERROR;
+    }
+    ledMode = NORMAL;
     spi_read16_blocking(spi, 0, input_data, 1);
     gpio_put(SPI_CS, 1);
     float celsius = (*input_data >> 3) * 0.25;  // First 3 are control bits
@@ -22,11 +28,7 @@ float get_celsius(spi_inst_t *spi, uint16_t *input_data) {
 }
 
 void blink() {
-    static int current_led_state = 0;
-
-    current_led_state = !current_led_state;
-    gpio_put(HEALTH_LED, current_led_state);
-
+    gpio_put(HEALTH_LED, !gpio_get(HEALTH_LED));
 }
 
 void set_boiler_relay(bool enable) {
@@ -77,31 +79,40 @@ void init_peripherals(spi_inst_t *spi) {
 
 double calculate_temperature_error() {
 
-    static float error = 0;
-    static float previous_error = 0;
-    static double proportional_gain = 0;
-    static double integral_gain = 0.0;
-    static double derivative_gain = 0.0;
+    boiler_information.pid_previous_error = boiler_information.pid_error;
+    boiler_information.pid_error = TARGET_BOILER_TEMPERATURE - boiler_information.current_boiler_temperature;
 
-    previous_error = error;
-    error = TARGET_BOILER_TEMPERATURE - boiler_information.current_boiler_temperature;
+    // If above target temperature for too long, indicate to user
+    // If overheating all the time, the PID gains are probably wrong and should be adjusted
+    if (boiler_information.current_boiler_temperature > TARGET_BOILER_TEMPERATURE){
+        if (boiler_information.overheat_count > 10) {
+            ledMode = OVERHEAT_ERROR;
+        }
+        else{
+            boiler_information.overheat_count += 1;
+        }
+    }
+    else{
+        boiler_information.overheat_count = 0;
+        ledMode = NORMAL;
+    }
 
-    printf("Current Error: %.4f\n", error);
+    printf("Current Error: %.4f\n", boiler_information.pid_error);
     printf("Current Boiler: %.4f\n", boiler_information.current_boiler_temperature);
 
     // Time delta is assumed to be 1 second due to boiler_set_duty_cycle
     // only returning after 1 second has elapsed
-    proportional_gain = error * Kp;
-    if (integral_gain < MAX_DUTY_CYCLE) {
-        integral_gain += (error * Ki);
+    boiler_information.proportional_gain = boiler_information.pid_error * Kp;
+    if (boiler_information.integral_gain < MAX_DUTY_CYCLE) {
+        boiler_information.integral_gain += (boiler_information.pid_error * Ki);
     }
-    derivative_gain = ((error - previous_error) * Kd);
+    boiler_information.derivative_gain = ((boiler_information.pid_error - boiler_information.pid_previous_error) * Kd);
 
-    printf("proportional_gain: %.4f\n", proportional_gain);
-    printf("integral_gain: %.4f\n", integral_gain);
-    printf("derivative_gain: %.4f\n", derivative_gain);
+    printf("proportional_gain: %.4f\n", boiler_information.proportional_gain);
+    printf("integral_gain: %.4f\n", boiler_information.integral_gain);
+    printf("derivative_gain: %.4f\n", boiler_information.derivative_gain);
 
-    double output = (proportional_gain + integral_gain + derivative_gain);
+    double output = (boiler_information.proportional_gain + boiler_information.integral_gain + boiler_information.derivative_gain);
 
     // Clamp the output because we cannot drive higher than MAX_DUTY_CYCLE, or lower than 0
     if (output > MAX_DUTY_CYCLE) {
@@ -142,32 +153,48 @@ void boiler_set_duty_cycle() {
 
 }
 
-void update_led_temperature_display() {
-    uint8_t red_tint;
+void update_led_panel() {
+    uint8_t red_tint = 0x00;
     uint8_t green_tint = 0x00;
-    uint8_t blue_tint;
+    uint8_t blue_tint = 0x00;
 
     while (true) {
-        // prevent rollover, should be no need to check negative numbers
-        if (boiler_information.current_boiler_temperature > TARGET_BOILER_TEMPERATURE) {
-            red_tint = 0xA0;
-            blue_tint = 0x00;
-        } else {
-            // The red LED is a lot stronger than blue, so scale it down some
-            red_tint = (uint8_t) (0xA0 * (boiler_information.current_boiler_temperature / TARGET_BOILER_TEMPERATURE));
-            if (boiler_information.current_boiler_temperature < 25) {
-                blue_tint = 0xFF;
-            } else {
-                blue_tint = (uint8_t) (0xFF *
-                                       ((TARGET_BOILER_TEMPERATURE - boiler_information.current_boiler_temperature +
-                                         25) / TARGET_BOILER_TEMPERATURE));
-            }
+
+        switch(ledMode){
+
+            case NORMAL:
+                // prevent rollover, should be no need to check negative numbers
+                if (boiler_information.current_boiler_temperature > TARGET_BOILER_TEMPERATURE) {
+                    red_tint = 0xA0;
+                    blue_tint = 0x00;
+                } else {
+                    // The red LED is a lot stronger than blue, so scale it down some
+                    red_tint = (uint8_t) (0xA0 * (boiler_information.current_boiler_temperature / TARGET_BOILER_TEMPERATURE));
+                    if (boiler_information.current_boiler_temperature < 25) {
+                        blue_tint = 0xFF;
+                    } else {
+                        blue_tint = (uint8_t) (0xFF *
+                                               ((TARGET_BOILER_TEMPERATURE - boiler_information.current_boiler_temperature +
+                                                 25) / TARGET_BOILER_TEMPERATURE));
+                    }
+                }
+
+                update_all_pixels(&pixel_array, red_tint, green_tint, blue_tint);
+                refresh_leds(&pixel_array);
+                sleep_ms(200);
+
+            case OVERHEAT_ERROR:
+                red_tint = !red_tint;
+                update_all_pixels(&pixel_array, red_tint, green_tint, blue_tint);
+                refresh_leds(&pixel_array);
+                sleep_ms(500);
+
+            case SPI_READ_ERROR:
+                green_tint = !green_tint;
+                update_all_pixels(&pixel_array, red_tint, green_tint, blue_tint);
+                refresh_leds(&pixel_array);
+                sleep_ms(500);
         }
-
-        update_all_pixels(&pixel_array, red_tint, green_tint, blue_tint);
-
-        refresh_leds(&pixel_array);
-        sleep_ms(200);
     }
 }
 
@@ -178,13 +205,11 @@ int main() {
     uint16_t thermocouple_data = 0x0;
     uint16_t *pThermocoupleData = &thermocouple_data;
 
-    boiler_information.duty_cycle = 0;
-    boiler_information.current_boiler_temperature = 0;
-
     multicore_reset_core1();
     init_peripherals(spi);
     init_leds(&pixel_array);
-    multicore_launch_core1(update_led_temperature_display);
+    ledMode = NORMAL;
+    multicore_launch_core1(update_led_panel);
 
     while (true) {
 
