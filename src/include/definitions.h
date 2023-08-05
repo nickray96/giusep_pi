@@ -13,10 +13,10 @@
 #define SPI_CS  1
 #define SPI_SO  0
 #define HEALTH_LED 28
-#define BOILER_RELAY_OUTPUT 16
+#define BOILER_RELAY_OUTPUT 3
 #define BOILER_SECONDARY_RELAY_OUTPUT 17
-#define WS2818_OUTPUT 4
-#define WS2818_ONBOARD 18
+// #define WS2818_OUTPUT 4
+#define WS2818_OUTPUT 18
 
 // Constants
 
@@ -27,7 +27,7 @@
 #define Kd 0.005
 #define WS2812_BITS_PER_COLOR 8
 #define WS2812_BITS_PER_PIXEL (WS2812_BITS_PER_COLOR * 3)
-#define WS2812_PIXEL_COUNT 20
+#define WS2812_PIXEL_COUNT 2
 
 // Structs
 
@@ -70,7 +70,5 @@ void refresh_leds(p_ws2812_array_t ptr_pixel_array);
 void update_all_pixels(p_ws2812_array_t ptr_pixel_array, uint8_t red, uint8_t green, uint8_t blue);
 
 void init_leds(p_ws2812_array_t ptr_pixel_array);
-
-enum LED_MODE ledMode;
 
 #endif //GIUSEP_PI_DEFINITIONS_H

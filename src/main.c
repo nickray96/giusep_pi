@@ -10,6 +10,7 @@
 
 boiler_control_t boiler_information = {0};
 ws2812_array_t pixel_array = {0};
+enum LED_MODE ledMode;
 
 float get_celsius(spi_inst_t *spi, uint16_t *input_data) {
 
@@ -209,6 +210,7 @@ int main() {
     init_peripherals(spi);
     init_leds(&pixel_array);
     ledMode = NORMAL;
+
     multicore_launch_core1(update_led_panel);
 
     while (true) {
