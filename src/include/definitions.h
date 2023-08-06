@@ -43,6 +43,7 @@ typedef struct ws2812_array_t {
 } ws2812_array_t, *p_ws2812_array_t;
 
 typedef struct boiler_control_t {
+    _Bool health_led;
     float current_boiler_temperature;
     float pid_error;
     float pid_previous_error;
