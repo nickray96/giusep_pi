@@ -4,9 +4,9 @@
 ### Working:
 * MAX6675 temperature input
 * PID control of boiler based on temperature
+* WS2812 indication of state/temp/errors
 
 ### WIP:
-* WS2812 indication of state/temp/errors
 
 ### Not Started:
 * Machine auto-shutdown
