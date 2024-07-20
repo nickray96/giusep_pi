@@ -165,42 +165,78 @@ void boiler_set_duty_cycle() {
 
 }
 
-void update_led_panel() {
+bool boiler_led_update(struct repeating_timer* t) {
     uint8_t red_tint = 0x00;
     uint8_t green_tint = 0x00;
     uint8_t blue_tint = 0x00;
+    // prevent rollover, should be no need to check negative numbers
+    if (boiler_information.current_boiler_temperature > TARGET_BOILER_TEMPERATURE) {
+        red_tint = 0xA0;
+        blue_tint = 0x00;
+    } else {
+        // The red LED is a lot stronger than blue, so scale it down some
+        red_tint = (uint8_t) (0xA0 *
+                            (boiler_information.current_boiler_temperature / TARGET_BOILER_TEMPERATURE));
+        if (boiler_information.current_boiler_temperature < 25) {
+            blue_tint = 0xFF;
+        } else {
+            blue_tint = (uint8_t) (0xFF *
+                                ((TARGET_BOILER_TEMPERATURE - boiler_information.current_boiler_temperature +
+                                    25) / TARGET_BOILER_TEMPERATURE));
+        }
+    }
+
+    update_all_pixels(&pixel_array, red_tint, green_tint, blue_tint);
+    refresh_leds(&pixel_array);
+    return true;
+}
+
+bool pulse_green_led(struct repeating_timer* t) {
+    update_all_pixels(&pixel_array, 0x00, *(uint8_t *)t->user_data++, 0x00);
+    refresh_leds(&pixel_array);
+    return true;
+}
+
+bool pulse_blue_led(struct repeating_timer* t) {
+    update_all_pixels(&pixel_array, 0x00, 0x00, *(uint8_t *)t->user_data++);
+    refresh_leds(&pixel_array);
+    return true;
+}
+
+void update_led_panel() {
+
+    struct repeating_timer timer;
+    static enum LED_MODE last_mode;
 
     while (true) {
-        if (ledMode == NORMAL) {
-            // prevent rollover, should be no need to check negative numbers
-            if (boiler_information.current_boiler_temperature > TARGET_BOILER_TEMPERATURE) {
-                red_tint = 0xA0;
-                blue_tint = 0x00;
-            } else {
-                // The red LED is a lot stronger than blue, so scale it down some
-                red_tint = (uint8_t) (0xA0 *
-                                      (boiler_information.current_boiler_temperature / TARGET_BOILER_TEMPERATURE));
-                if (boiler_information.current_boiler_temperature < 25) {
-                    blue_tint = 0xFF;
-                } else {
-                    blue_tint = (uint8_t) (0xFF *
-                                           ((TARGET_BOILER_TEMPERATURE - boiler_information.current_boiler_temperature +
-                                             25) / TARGET_BOILER_TEMPERATURE));
-                }
-            }
+        if (ledMode != last_mode)
+            cancel_repeating_timer(&timer);
+        else
+            continue;
+        switch (ledMode) {
 
-            update_all_pixels(&pixel_array, red_tint, green_tint, blue_tint);
-            refresh_leds(&pixel_array);
-            sleep_ms(200);
+            case NORMAL:
+                add_repeating_timer_ms(200, boiler_led_update, NULL, &timer);
+                break;
+
+            case SPI_READ_ERROR:
+                ;
+                uint8_t *green_tint;
+                *green_tint = 0x00;
+                add_repeating_timer_ms(2, pulse_green_led, green_tint, &timer);
+                break;
+                
+            case AUTO_SHUTDOWN:
+                ;
+                uint8_t *blue_tint;
+                *blue_tint = 0x00;
+                add_repeating_timer_ms(2, pulse_blue_led, blue_tint, &timer);
+                break;
+            
+            default:
+                break;
         }
-        if (ledMode == SPI_READ_ERROR) {
-            for (int i = 0; i <= 0xFF; i++) {
-                green_tint++;
-                sleep_ms(2);
-                update_all_pixels(&pixel_array, 0x00, green_tint, 0x00);
-                refresh_leds(&pixel_array);
-            }
-        }
+        last_mode = ledMode;
     }
 }
 
