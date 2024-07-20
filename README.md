@@ -7,9 +7,9 @@
 * WS2812 indication of state/temp/errors
 
 ### WIP:
+* Machine auto-shutdown, because I keep leaving this dang thing on for hours
 
 ### Not Started:
-* Machine auto-shutdown
 * Pressure sensor input/UX
 * GitHub Actions build pipeline upon commit
 * Instructions
